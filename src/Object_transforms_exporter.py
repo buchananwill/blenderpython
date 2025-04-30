@@ -1,40 +1,53 @@
 import bpy, csv, pathlib
+from mathutils import Vector  # only import what we use
 
 # -------- settings ---------------------------------------------------------
-DECIMALS   = 6        # float precision
-UNIT_SCALE = 100.0    # Blender metres → Unreal centimetres (set 1.0 if units match)
-CSV_PATH   = pathlib.Path(bpy.data.filepath).with_suffix(".ue5_transforms.csv")
+DECIMALS   = 6         # float precision
+UNIT_SCALE = 100.0     # Blender metres → Unreal centimetres (set 1.0 if units match)
+
+# Blend could be unsaved; default to home dir in that case
+blend_path = pathlib.Path(bpy.data.filepath) if bpy.data.is_saved else pathlib.Path.home()
+CSV_PATH   = blend_path.with_suffix(".ue5_transforms.csv")
+
 # ---------------------------------------------------------------------------
 
-csv_transform_headers = ["name", "qx", "qy", "qz", "qw", "tx", "ty", "tz", "sx", "sy", "sz"]
+csv_headers = ["RowName","Transform"]
+
+def round_to_ue(number):
+    return round(number, DECIMALS)
+
+def make_transform_string(source_object):
+    loc, rot, scale = source_object.matrix_world.decompose()
+    loc *= UNIT_SCALE
+    rot = rot.normalized()
+
+    return (
+    f"(Rotation=(X={round_to_ue(rot.x):.6f},Y={round_to_ue(rot.y):.6f},Z={round_to_ue(rot.z):.6f},W={round_to_ue(rot.w):.6f}),"
+    f"Translation=(X={round_to_ue(loc.x):.6f},Y={round_to_ue(loc.y):.6f},Z={round_to_ue(loc.z):.6f}),"
+    f"Scale3D=(X={round_to_ue(scale.x):.6f},Y={round_to_ue(scale.y):.6f},Z={round_to_ue(scale.z):.6f}))"
+    )
+
 
 def make_object_row(source_object):
-    # 1 · origin to geometry bounds
     bpy.context.view_layer.objects.active = source_object
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')  # docs
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
 
-    # 2 · world-space TRS
-    loc, rot, scale = source_object.matrix_world.decompose()
-    loc *= UNIT_SCALE                # convert to cm
-    rot = rot.normalized()           # ensure unit-length
-
-    return [
-        source_object.name,
-        round(rot.x, DECIMALS), round(rot.y, DECIMALS),
-        round(rot.z, DECIMALS), round(rot.w, DECIMALS),
-        round(loc.x, DECIMALS), round(loc.y, DECIMALS), round(loc.z, DECIMALS),
-        round(scale.x, DECIMALS), round(scale.y, DECIMALS), round(scale.z, DECIMALS)
-    ]
+    return [source_object.name, make_transform_string(source_object)]
 
 def export_object_transforms():
-    csv_transform_rows = [csv_transform_headers]
-    mesh_objects = [selected_object for selected_object in bpy.context.selected_objects if selected_object.type == 'MESH']
+    selected_meshes = [o for o in bpy.context.selected_objects if o.type == 'MESH']
+    if not selected_meshes:
+        print("Nothing to export: select at least one mesh and try again.")
+        return
 
-    for source_object in mesh_objects:
-        csv_transform_rows.append(make_object_row(source_object))
+    rows = [csv_headers] + [make_object_row(obj) for obj in selected_meshes]
 
-    # 4 · write CSV
+    # make sure the directory exists
+    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     with CSV_PATH.open("w", newline="") as fp:
-        csv.writer(fp).writerows(csv_transform_rows)
+        csv.writer(fp).writerows(rows)
 
-    print(f"Saved {len(csv_transform_rows) - 1} transforms → {CSV_PATH}")
+    print(f"Saved {len(rows)-1} transforms → {CSV_PATH}")
+
+# ---------------------------------------------------------------------------
+export_object_transforms()
