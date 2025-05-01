@@ -24,14 +24,14 @@ def edit_mode(obj: bpy.types.Object):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 def put_islands_in_collection(source_name: str,
-                              islands: List[bpy.types.Object]) -> None:
+                              islands_list: List[bpy.types.Object]) -> None:
     """Link *islands* exclusively to a collection called `<source>_islands`."""
     target = f"{source_name}_islands"
     col = bpy.data.collections.get(target) or bpy.data.collections.new(target)
     if col.name not in bpy.context.scene.collection.children:
         bpy.context.scene.collection.children.link(col)      # scene-root link :contentReference[oaicite:1]{index=1}
 
-    for obj in islands:
+    for obj in islands_list:
         # link once
         if col not in obj.users_collection:
             col.objects.link(obj)                            # link API :contentReference[oaicite:2]{index=2}
@@ -53,16 +53,14 @@ def split_islands_fast(source_object: bpy.types.Object) -> List[bpy.types.Object
         bpy.ops.mesh.separate(type='LOOSE')                           # one-shot split :contentReference[oaicite:6]{index=6}
 
     # 3 – objects now selected: first is empty residue, rest are islands
-    pieces = list(bpy.context.selected_objects)                       # selection unchanged :contentReference[oaicite:7]{index=7}
-    residue, islands = pieces[0], pieces[1:]
+    islands_list = list(bpy.context.selected_objects)                       # selection unchanged :contentReference[oaicite:7]{index=7}
+
 
     # 4 – rename islands
-    for i, obj in enumerate(islands):
+    for i, obj in enumerate(islands_list):
         obj.name = f"{source_object.name}_island_{i}"
 
-    # 5 – cleanup residue (zero-vertex original)
-    bpy.data.objects.remove(residue, do_unlink=True)                  # remove API :contentReference[oaicite:8]{index=8}
-    return islands
+    return islands_list
 
 # ---------------------------------------------------------------------
 # Drive it on the current selection
