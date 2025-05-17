@@ -5,10 +5,6 @@ from mathutils import Vector  # only import what we use
 DECIMALS = 6  # float precision
 UNIT_SCALE = 100.0  # Blender metres → Unreal centimetres (set 1.0 if units match)
 
-# Blend could be unsaved; default to home dir in that case
-blend_path = pathlib.Path(bpy.data.filepath) if bpy.data.is_saved else pathlib.Path.home()
-CSV_PATH = blend_path.with_suffix(".ue5_transforms.csv")
-
 # ---------------------------------------------------------------------------
 
 csv_headers = ["RowName", "Transform"]
@@ -43,19 +39,32 @@ def make_object_row(source_object):
 
 
 def export_object_transforms():
-    selected_meshes = [o for o in bpy.context.selected_objects if o.type == 'MESH']
+    selected_collection = bpy.context.collection
+    if selected_collection is None:
+        return
+
+    # Blend could be unsaved; default to home dir in that case
+    base_dir = pathlib.Path(bpy.data.filepath).parent if bpy.data.is_saved else pathlib.Path.home()
+
+    clean_name = selected_collection.name.replace(" ", "_")
+
+    csv_path = base_dir / f"{clean_name}.csv"
+
+    selected_meshes = [o for o in selected_collection.objects if o.type == 'MESH']
     if not selected_meshes:
         print("Nothing to export: select at least one mesh and try again.")
         return
 
+    selected_meshes = sorted(selected_meshes, key=lambda x: int(x.name.split("_")[-1]))
+
     rows = [csv_headers] + [make_object_row(obj) for obj in selected_meshes]
 
     # make sure the directory exists
-    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CSV_PATH.open("w", newline="") as fp:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="") as fp:
         csv.writer(fp).writerows(rows)
 
-    print(f"Saved {len(rows) - 1} transforms → {CSV_PATH}")
+    print(f"Saved {len(rows) - 1} transforms → {csv_path}")
 
 
 # ---------------------------------------------------------------------------
